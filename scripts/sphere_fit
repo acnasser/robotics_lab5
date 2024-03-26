@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+
+import numpy as np 
+import rospy
+from robot_vision_lectures.msg import XYZarray, SphereParams
+
+# Initialize lists to collect points data
+x_points = []
+y_points = []
+z_points = []
+
+
+
+# Callback function to process incoming XYZ data
+def xyz_callback(data):
+    global x_points, y_points, z_points
+    print("Received Data Points:")
+
+    for point in data.points: 			
+        x_points.append(point.x) 			
+        y_points.append(point.y) 			
+        z_points.append(point.z)
+
+    # converting lists to numpys arrrays 
+    X = np.array(x_points)
+    Y = np.array(y_points)
+    Z = np.array(z_points)
+
+    # calling the function get the fitted data 
+    center, radius = fitting_the_sphere(X, Y, Z)
+
+# function for fitted data
+def fitting_the_sphere(X, Y, Z):
+
+	# least square fit algorithm 
+	# most of credit goes to this website:  lucidar.me/en/mathematics/least-squares-fitting-of-sphere/
+	
+	# and dr. saeidi h.
+    num_points = X.shape[0]
+    A = np.c_[2 * X, 2 * Y, 2 * Z, np.ones(num_points)]
+    b = X**2 + Y**2 + Z**2
+    x, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
+    xc, yc, zc, d = x 
+    
+    radius = np.sqrt(xc**2 + yc**2 + zc**2 - d)
+    center = np.array([xc, yc, zc])
+	
+	
+    sphere_msg = SphereParams()
+    sphere_msg.xc=center[0]
+    sphere_msg.yc=center[1]
+    sphere_msg.zc=center[2]
+    sphere_msg.radius=radius
+    
+    pub.publish(sphere_msg)
+    print("radius",radius,"center", center)
+    
+    return center, radius
+    
+
+
+# Main ROS node setup
+if __name__ == '__main__':
+	rospy.init_node('sphere_fit', anonymous=True)
+	rospy.Subscriber('xyz_cropped_ball', XYZarray, xyz_callback)
+	global pub
+	pub = rospy.Publisher("sphere_params",SphereParams,queue_size=10)
+	rate = rospy.Rate(10)
+	while not rospy.is_shutdown():
+		
+		
+		# 
+		X = np.array(x_points)
+		Y = np.array(y_points)
+		Z = np.array(z_points)
+
+		
+		center, radius = fitting_the_sphere(X, Y, Z)
+		
+		#getting the center and the radius and publishing it to the sphere params
+		sphere_msg = SphereParams()
+		
+		sphere_msg.xc = center[0]
+		sphere_msg.yc = center[1]
+		sphere_msg.zc = center[2]
+		sphere_msg.radius = radius
+		
+		pub.publish(sphere_msg)
+		
+	rate.sleep()
+    	
+    	
